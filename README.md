@@ -55,6 +55,8 @@ You can find your wallet's root public key using this command:
 chia keys show
 ```
 
+The configuration is stored in `~/.offline-signer` by default.
+
 To set up the cold wallet, connected to your local mainnet full node:
 
 ```bash
