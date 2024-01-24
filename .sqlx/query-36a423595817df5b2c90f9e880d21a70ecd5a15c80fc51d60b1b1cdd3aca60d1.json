@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            CREATE TABLE IF NOT EXISTS `derivations` (\n                `derivation_index` INT PRIMARY KEY,\n                `secret_key` BLOB,\n                `public_key` BLOB NOT NULL,\n                `puzzle_hash` BLOB NOT NULL\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "36a423595817df5b2c90f9e880d21a70ecd5a15c80fc51d60b1b1cdd3aca60d1"
+}
