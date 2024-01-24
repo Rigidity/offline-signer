@@ -74,7 +74,7 @@ Note that the `--agg-sig-data` is the same as the mainnet genesis challenge when
 You can find your wallet's mnemonic using this command:
 
 ```bash
-chia keys show --show-mnemonic-phrase
+chia keys show --show-mnemonic-seed
 ```
 
 To set up the signer, offline from the network:
