@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT MAX(`derivation_index`) AS `max_derivation` FROM `derivations`\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "max_derivation",
+        "ordinal": 0,
+        "type_info": "Int"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "fe19add8eeecd4740978aa004837c019f26b0c2ca8d53e75c2ec512f45e7f886"
+}

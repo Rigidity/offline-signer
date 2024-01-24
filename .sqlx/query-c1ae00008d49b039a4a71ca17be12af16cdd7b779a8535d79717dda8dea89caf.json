@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT `secret_key` FROM `derivations` WHERE `public_key` = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "secret_key",
+        "ordinal": 0,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c1ae00008d49b039a4a71ca17be12af16cdd7b779a8535d79717dda8dea89caf"
+}
