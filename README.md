@@ -47,7 +47,7 @@ You can see a list of commands with:
 offline-signer help
 ```
 
-## Setup Cold Wallet
+## Setup Wallet
 
 You can find your wallet's root public key using this command:
 
