@@ -1,6 +1,5 @@
 # Offline Signer
 
-[![crate](https://img.shields.io/crates/v/offline-signer.svg)](https://crates.io/crates/offline-signer)
 [![minimum rustc 1.75](https://img.shields.io/badge/rustc-1.75+-red.svg)](https://rust-lang.github.io/rfcs/2495-min-rust-version.html)
 
 This is an unofficial CLI wallet application for the [Chia blockchain](https://chia.net). It's built from the ground up using the [wallet SDK library](https://github.com/Rigidity/chia-wallet-sdk), and allows you to create transactions using only your public key, and sign them offline on a different machine, using only the private key and no full node.
@@ -20,7 +19,7 @@ You will first need to install the Rust toolchain, by running the command on the
 Then, run the following command to install the offline signer CLI:
 
 ```bash
-cargo install offline-signer
+cargo install --git https://github.com/Rigidity/offline-signer
 ```
 
 You can see a list of commands with:
