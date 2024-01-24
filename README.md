@@ -4,6 +4,8 @@
 
 This is an unofficial CLI wallet application for the [Chia blockchain](https://chia.net). It's built from the ground up using the [wallet SDK library](https://github.com/Rigidity/chia-wallet-sdk), and allows you to create transactions using only your public key, and sign them offline on a different machine, using only the private key and no full node.
 
+This does **not** run against the official Chia light wallet, but rather is itself a custom light wallet implementation that connects to a trusted full node. This means you will either have to run a full node yourself or connect to one that you can trust. Peer discovery and validation have not yet been implemented but may be added in the future, to make it as easy to use as the Chia wallet.
+
 ## Disclaimer
 
 This project is experimental and a work in progress. It has not yet been rigorously tested in a production environment. Use on mainnet only at your own risk, and verify transactions before submitting them to the network.
