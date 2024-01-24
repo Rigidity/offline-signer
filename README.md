@@ -23,7 +23,7 @@ Currently this wallet has the following limitations:
 - It syncs the wallet's coin state from zero every time you run a command, which could potentially be slow in some cases.
 - It's very early in development and the wallet sdk is very new. Expect things to not be perfect!
 - It does not keep track of pending transactions, so you could potentially create duplicate spends on accident (though due to blockchain and mempool validation, this would only be annoying, rather than causing an actual issue).
-- There isn't support for [Replace By Fee] (RBF), although I do plan on adding this in a future release.
+- There isn't support for [Replace By Fee](https://docs.chia.net/mempool/#replace-by-fee) (RBF), although I do plan on adding this in a future release.
 - It's a bit too verbose to use if you are creating, signing, and submitting transactions all on the same machine.
 - It's not very user friendly or flexible. Interested in feedback for this!
 
