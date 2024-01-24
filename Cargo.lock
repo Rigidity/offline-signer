@@ -409,7 +409,9 @@ dependencies = [
 
 [[package]]
 name = "chia-wallet-sdk"
-version = "0.2.0"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "167e0589505e6e3fda492d8d91b65f2ec1c6ec93d1778d493413dbb046fce431"
 dependencies = [
  "bech32",
  "chia-bls 0.4.0",

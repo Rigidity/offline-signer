@@ -217,12 +217,7 @@ async fn main() {
             let total_amount = send_amount as u128 + fee_amount as u128;
             let mut coins = Vec::new();
 
-            for coin in coin_store
-                .unspent_coins()
-                .await
-                .into_iter()
-                .map(|coin_state| coin_state.coin)
-            {
+            for coin in coin_store.unspent_coins().await {
                 if derivation_store
                     .index_of_puzzle_hash((&coin.puzzle_hash).into())
                     .await
