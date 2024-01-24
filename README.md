@@ -12,6 +12,19 @@ I am not to be held responsible for any misuse of this application. Please do **
 
 That said, contributions and any help testing it are appreciated.
 
+## Limitations
+
+Currently this wallet has the following limitations:
+
+- It only supports the [Standard Transaction](https://chialisp.com/standard-transactions) (XCH coins).
+- No support for hardened keys (non-observer keys, for example used by the simulator's prefarm).
+- It syncs the wallet's coin state from zero every time you run a command, which could potentially be slow in some cases.
+- It's very early in development and the wallet sdk is very new. Expect things to not be perfect!
+- It does not keep track of pending transactions, so you could potentially create duplicate spends on accident (though due to blockchain and mempool validation, this would only be annoying, rather than causing an actual issue).
+- There isn't support for [Replace By Fee] (RBF), although I do plan on adding this in a future release.
+- It's a bit too verbose to use if you are creating, signing, and submitting transactions all on the same machine.
+- It's not very user friendly or flexible. Interested in feedback for this!
+
 ## Installation
 
 You will first need to install the Rust toolchain, by running the command on the [Rustup](https://rustup.rs) website.
