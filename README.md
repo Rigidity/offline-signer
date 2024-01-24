@@ -27,11 +27,15 @@ Currently this wallet has the following limitations:
 - It's a bit too verbose to use if you are creating, signing, and submitting transactions all on the same machine.
 - It's not very user friendly or flexible. Interested in feedback for this!
 
+## Prerequisites
+
+You must have the [Chia full node](https://chia.net/downloads) installed and running on the network of your choice.
+
+You will need to install the Rust toolchain, by running the command on the [Rustup](https://rustup.rs) website.
+
 ## Installation
 
-You will first need to install the Rust toolchain, by running the command on the [Rustup](https://rustup.rs) website.
-
-Then, run the following command to install the offline signer CLI:
+Run the following command to install the offline signer CLI:
 
 ```bash
 cargo install --git https://github.com/Rigidity/offline-signer
