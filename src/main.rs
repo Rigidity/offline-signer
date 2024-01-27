@@ -1,7 +1,8 @@
-use std::{fs, str::FromStr, sync::Arc};
+use std::{fs, path::PathBuf, str::FromStr, sync::Arc};
 
 use bip39::Mnemonic;
 use chia_bls::{SecretKey, Signature};
+use chia_client::Peer;
 use chia_protocol::{Coin, NodeType, SpendBundle};
 use chia_wallet::standard::STANDARD_PUZZLE;
 use chia_wallet_sdk::{
@@ -15,11 +16,12 @@ use clvmr::{serde::node_from_bytes, Allocator};
 use colored::Colorize;
 use config::Config;
 use database::WalletDb;
+use home::home_dir;
 use inquire::Confirm;
-use keys::{ConfigKey, WalletKey};
+use keys::{CliKey, ConfigKey, WalletKey};
 use spend_bundle::SpendBundleJson;
 use tokio::sync::mpsc;
-use utils::{amount_as_mojos, program_name, strip_prefix, Paths};
+use utils::{amount_as_mojos, create_dir, program_name, strip_prefix};
 
 mod cli;
 mod config;
@@ -28,46 +30,148 @@ mod keys;
 mod spend_bundle;
 mod utils;
 
-#[tokio::main]
-async fn main() {
-    let paths = Paths::new();
-    let program_name = program_name().unwrap_or("offline-signer".to_string());
+struct App {
+    yes: bool,
+    mojos: bool,
 
-    let cli = Cli::parse();
+    cli_name: String,
+    config: Option<Config>,
 
-    let config_str_owned = fs::read_to_string(paths.config.as_path()).ok();
-    let config_str = config_str_owned.as_ref();
+    ssl_path: PathBuf,
+    db_path: PathBuf,
+    config_path: PathBuf,
+}
 
-    let config: Option<Config> =
-        config_str.and_then(|config_str| serde_json::from_str(config_str).ok());
+impl App {
+    async fn start(cli: Cli) {
+        let app_path = home_dir().unwrap().join(".offline-signer");
+        create_dir(app_path.as_path());
 
-    if let Commands::Config {
-        key: cli_key,
-        node_uri,
-        network_id,
-        agg_sig_data,
-    } = cli.command
-    {
-        if !cli_key.generate
-            && cli_key.public_key.is_none()
-            && cli_key.secret_key.is_none()
-            && cli_key.mnemonic.is_none()
-            && node_uri.is_none()
-            && network_id.is_none()
-            && agg_sig_data.is_none()
-        {
-            println!("Config at path `{}`", paths.config.to_str().unwrap());
-            return;
+        let ssl_path = app_path.join("ssl");
+        create_dir(ssl_path.as_path());
+
+        let db_path = app_path.join("db");
+        create_dir(db_path.as_path());
+
+        let config_path = app_path.join("config.json");
+
+        let config = fs::read_to_string(config_path.as_path())
+            .map(|text| serde_json::from_str(&text).expect("invalid config file"))
+            .ok();
+
+        let app = Self {
+            yes: cli.yes,
+            mojos: cli.mojos,
+
+            cli_name: program_name().unwrap_or("offline-signer".to_string()),
+            config,
+
+            ssl_path,
+            db_path,
+            config_path,
+        };
+
+        match cli.command {
+            Commands::Config {
+                key,
+                node_uri,
+                network_id,
+                agg_sig_data,
+            } => {
+                app.config(key, node_uri, network_id, agg_sig_data);
+            }
+            Commands::Sign {
+                spend_bundle,
+                derivation_index,
+            } => {
+                app.sign(spend_bundle, derivation_index).await;
+            }
+            Commands::Push { spend_bundle } => {
+                app.push(spend_bundle).await;
+            }
+            Commands::Send {
+                address,
+                amount,
+                fee,
+            } => {
+                app.send(address, amount, fee).await;
+            }
+        }
+    }
+
+    async fn create_wallet(&self) -> (Arc<WalletDb>, u32) {
+        let config = self.config.clone().unwrap_or_else(|| {
+            panic!(
+                "no config file found, try running `{} init`",
+                &self.cli_name
+            )
+        });
+
+        let key = WalletKey::from_config(config.key.clone());
+
+        let fingerprint = match &key {
+            WalletKey::PublicKey(pk) => pk.get_fingerprint(),
+            WalletKey::SecretKey(sk) => sk.public_key().get_fingerprint(),
+        };
+
+        let db_path = self.db_path.join(format!("{fingerprint}.sqlite?mode=rwc"));
+        let db = Arc::new(
+            WalletDb::new(db_path.to_str().unwrap(), key.clone())
+                .await
+                .unwrap(),
+        );
+
+        (db, fingerprint)
+    }
+
+    async fn create_node(&self) -> Arc<Peer> {
+        let config = self.config.clone().unwrap_or_else(|| {
+            panic!(
+                "no config file found, try running `{} init`",
+                &self.cli_name
+            )
+        });
+
+        let node_uri = config
+            .node_uri
+            .as_ref()
+            .expect("`node_uri` is not set in config, cannot connect to peer");
+
+        let cert = load_ssl_cert(
+            self.ssl_path.join("wallet.crt").to_str().unwrap(),
+            self.ssl_path.join("wallet.key").to_str().unwrap(),
+        );
+        let tls = create_tls_connector(&cert);
+        let peer = connect_peer(node_uri, tls)
+            .await
+            .expect("could not connect to full node");
+
+        peer.send_handshake(config.network_id, NodeType::Wallet)
+            .await
+            .unwrap();
+
+        peer
+    }
+
+    fn config(
+        self,
+        cli_key: CliKey,
+        node_uri: Option<String>,
+        network_id: Option<String>,
+        agg_sig_data: Option<String>,
+    ) {
+        if cli_key == CliKey::default() {
+            return println!("Config at path `{}`", &self.cli_name);
         }
 
-        let old_config = config.as_ref();
+        let old_config = self.config.as_ref();
 
         let mut key = old_config.map(|config| config.key.clone());
         let generated = cli_key.generate;
 
         if let Some(old_key) = key.as_mut() {
             if let Some(new_key) = ConfigKey::from_cli(cli_key) {
-                if !cli.yes
+                if !self.yes
                     && !Confirm::new("Are you sure you want to replace the key?")
                         .prompt()
                         .unwrap()
@@ -119,73 +223,44 @@ async fn main() {
 
         let config_str = serde_json::to_string_pretty(&config).expect("could not serialize config");
 
-        fs::write(paths.config.as_path(), config_str).unwrap_or_else(|_| {
+        fs::write(self.config_path.as_path(), config_str).unwrap_or_else(|_| {
             panic!(
                 "could not write config file to {}",
-                paths.config.to_str().unwrap()
+                self.config_path.to_str().unwrap()
             )
         });
 
-        return println!("Config file initialized!");
+        println!("Config file initialized!");
     }
 
-    config_str
-        .unwrap_or_else(|| panic!("no config file found, try running `{} init`", &program_name));
-    let config = config.expect("invalid config file");
+    async fn sign(self, file: String, derivation_index: u32) {
+        let wallet = self.create_wallet().await.0;
 
-    let key = WalletKey::from_config(config.key.clone());
+        let text = fs::read_to_string(&file).expect("could not read spend bundle file");
+        let json: SpendBundleJson = serde_json::from_str(&text).expect("invalid spend bundle file");
+        let mut spend_bundle = SpendBundle::from(json);
 
-    let fingerprint = match &key {
-        WalletKey::PublicKey(pk) => pk.get_fingerprint(),
-        WalletKey::SecretKey(sk) => sk.public_key().get_fingerprint(),
-    };
-
-    let db_path = paths.db_dir.join(format!("{fingerprint}.sqlite?mode=rwc"));
-    let derivation_store_sync = Arc::new(
-        WalletDb::new(db_path.to_str().unwrap(), key.clone())
-            .await
-            .unwrap(),
-    );
-
-    if let Commands::Sign {
-        spend_bundle: spend_bundle_path,
-        derivation_index,
-    } = &cli.command
-    {
-        let spend_bundle_str =
-            fs::read_to_string(spend_bundle_path).expect("could not read spend bundle file");
-        let spend_bundle_json: SpendBundleJson =
-            serde_json::from_str(&spend_bundle_str).expect("invalid spend bundle file");
-        let mut spend_bundle = SpendBundle::from(spend_bundle_json);
-
-        if let WalletKey::PublicKey(_) = &key {
+        if let WalletKey::PublicKey(_) = wallet.key() {
             panic!("cannot sign with public key only, modify config to add secret key");
         }
 
-        derivation_store_sync
-            .derive_to_index(*derivation_index)
-            .await;
+        wallet.derive_to_index(derivation_index).await;
 
-        let agg_sig = hex::decode(config.agg_sig_data)
+        let agg_sig = hex::decode(self.config.unwrap().agg_sig_data)
             .unwrap()
             .try_into()
             .unwrap();
         let mut a = Allocator::new();
-        let signature = sign_spend_bundle(
-            derivation_store_sync.as_ref(),
-            &mut a,
-            &spend_bundle,
-            agg_sig,
-        )
-        .await
-        .expect("could not sign spend bundle");
+        let signature = sign_spend_bundle(wallet.as_ref(), &mut a, &spend_bundle, agg_sig)
+            .await
+            .expect("could not sign spend bundle");
 
         spend_bundle.aggregated_signature = signature.clone();
 
         let spend_bundle_json = SpendBundleJson::from(spend_bundle);
         let output = serde_json::to_string_pretty(&spend_bundle_json).unwrap();
 
-        fs::write(spend_bundle_path, output).unwrap();
+        fs::write(file, output).unwrap();
 
         println!(
             "{}",
@@ -197,30 +272,12 @@ async fn main() {
         );
     }
 
-    let node_uri = config
-        .node_uri
-        .as_ref()
-        .expect("`node_uri` is not set in config, cannot connect to peer");
+    async fn push(self, file: String) {
+        let text = fs::read_to_string(file).expect("could not read spend bundle file");
+        let json: SpendBundleJson = serde_json::from_str(&text).expect("invalid spend bundle file");
+        let spend_bundle = SpendBundle::from(json);
 
-    let cert = load_ssl_cert(
-        paths.ssl_dir.join("wallet.crt").to_str().unwrap(),
-        paths.ssl_dir.join("wallet.key").to_str().unwrap(),
-    );
-    let tls = create_tls_connector(&cert);
-    let peer = connect_peer(node_uri, tls)
-        .await
-        .expect("could not connect to full node");
-
-    peer.send_handshake(config.network_id, NodeType::Wallet)
-        .await
-        .unwrap();
-
-    if let Commands::Push { spend_bundle } = cli.command {
-        let spend_bundle_str =
-            fs::read_to_string(spend_bundle).expect("could not read spend bundle file");
-        let spend_bundle_json: SpendBundleJson =
-            serde_json::from_str(&spend_bundle_str).expect("invalid spend bundle file");
-        let spend_bundle = SpendBundle::from(spend_bundle_json);
+        let peer = self.create_node().await;
 
         let response = peer
             .send_transaction(spend_bundle)
@@ -246,19 +303,19 @@ async fn main() {
                 .bright_green()
             );
         }
-    } else if let Commands::Send {
-        address,
-        amount: cli_amount,
-        fee: cli_fee,
-    } = cli.command
-    {
+    }
+
+    async fn send(self, address: String, cli_amount: f64, cli_fee: f64) {
+        let (wallet, fingerprint) = self.create_wallet().await;
+        let peer = self.create_node().await;
+
         let puzzle_hash = parse_address(&address);
-        let send_amount = amount_as_mojos(cli_amount, cli.mojos);
-        let fee_amount = amount_as_mojos(cli_fee, cli.mojos);
+        let send_amount = amount_as_mojos(cli_amount, self.mojos);
+        let fee_amount = amount_as_mojos(cli_fee, self.mojos);
 
         let coin_store_sync = Arc::new(MemoryCoinStore::new());
 
-        let derivation_store = derivation_store_sync.clone();
+        let derivation_store = wallet.clone();
         let coin_store = coin_store_sync.clone();
 
         let (sender, mut receiver) = mpsc::channel(32);
@@ -339,7 +396,7 @@ async fn main() {
 
         chia_wallet_sdk::incremental_sync(
             peer,
-            derivation_store_sync,
+            wallet,
             coin_store_sync,
             SyncConfig {
                 minimum_unused_derivations: 100,
@@ -349,4 +406,9 @@ async fn main() {
         .await
         .unwrap();
     }
+}
+
+#[tokio::main]
+async fn main() {
+    App::start(Cli::parse()).await;
 }

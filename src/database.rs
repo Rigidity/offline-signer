@@ -20,6 +20,10 @@ impl WalletDb {
         Ok(Self { pool, key })
     }
 
+    pub fn key(&self) -> &WalletKey {
+        &self.key
+    }
+
     async fn insert_derivation(
         &self,
         tx: &mut Transaction<'_, Sqlite>,

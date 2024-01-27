@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::strip_prefix;
 
-#[derive(Args)]
+#[derive(Args, Default, PartialEq, Eq)]
 #[group(multiple = false)]
 pub struct CliKey {
     /// Generates a new mnemonic phrase.

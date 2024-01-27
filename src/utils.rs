@@ -1,42 +1,10 @@
-use std::{
-    ffi::OsStr,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{ffi::OsStr, fs, path::Path};
 
 use chia_protocol::Program;
 use clvmr::{
     serde::{node_from_bytes, node_to_bytes},
     Allocator, FromNodePtr, ToNodePtr,
 };
-use home::home_dir;
-
-pub struct Paths {
-    pub ssl_dir: PathBuf,
-    pub db_dir: PathBuf,
-    pub config: PathBuf,
-}
-
-impl Paths {
-    pub fn new() -> Self {
-        let app_dir = home_dir().unwrap().join(".offline-signer");
-        create_dir(app_dir.as_path());
-
-        let ssl_dir = app_dir.join("ssl");
-        create_dir(ssl_dir.as_path());
-
-        let db_dir = app_dir.join("db");
-        create_dir(db_dir.as_path());
-
-        let config = app_dir.join("config.json");
-
-        Self {
-            ssl_dir,
-            db_dir,
-            config,
-        }
-    }
-}
 
 pub fn bytes_to_program(bytes: Vec<u8>) -> Program {
     let mut a = Allocator::new();
