@@ -6,8 +6,11 @@ use crate::keys::CliKey;
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
     /// Whether to use mojos for amounts instead of XCH.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub mojos: bool,
+
+    #[arg(long, short = 'y', global = true)]
+    pub yes: bool,
 
     #[command(subcommand)]
     pub command: Commands,
@@ -16,7 +19,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Initializes the config file with your wallet's key.
-    Init {
+    Config {
         #[clap(flatten)]
         key: CliKey,
 

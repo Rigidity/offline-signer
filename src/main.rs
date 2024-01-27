@@ -1,6 +1,7 @@
-use std::{fs, sync::Arc};
+use std::{fs, str::FromStr, sync::Arc};
 
-use chia_bls::Signature;
+use bip39::Mnemonic;
+use chia_bls::{SecretKey, Signature};
 use chia_protocol::{Coin, NodeType, SpendBundle};
 use chia_wallet::standard::STANDARD_PUZZLE;
 use chia_wallet_sdk::{
@@ -14,10 +15,11 @@ use clvmr::{serde::node_from_bytes, Allocator};
 use colored::Colorize;
 use config::Config;
 use database::WalletDb;
+use inquire::Confirm;
 use keys::{ConfigKey, WalletKey};
 use spend_bundle::SpendBundleJson;
 use tokio::sync::mpsc;
-use utils::{amount_as_mojos, path_exists, program_name, Paths};
+use utils::{amount_as_mojos, program_name, strip_prefix, Paths};
 
 mod cli;
 mod config;
@@ -33,29 +35,88 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    if let Commands::Init {
-        key,
+    let config_str_owned = fs::read_to_string(paths.config.as_path()).ok();
+    let config_str = config_str_owned.as_ref();
+
+    let config: Option<Config> =
+        config_str.and_then(|config_str| serde_json::from_str(config_str).ok());
+
+    if let Commands::Config {
+        key: cli_key,
         node_uri,
         network_id,
         agg_sig_data,
     } = cli.command
     {
-        if path_exists(paths.config.as_path()) {
-            panic!(
-                "config file already exists, you can edit it at {}",
-                paths.config.to_str().unwrap()
-            );
+        if !cli_key.generate
+            && cli_key.public_key.is_none()
+            && cli_key.secret_key.is_none()
+            && cli_key.mnemonic.is_none()
+            && node_uri.is_none()
+            && network_id.is_none()
+            && agg_sig_data.is_none()
+        {
+            println!("Config at path `{}`", paths.config.to_str().unwrap());
+            return;
         }
 
-        let key = ConfigKey::from(key);
+        let old_config = config.as_ref();
+
+        let mut key = old_config.map(|config| config.key.clone());
+        let generated = cli_key.generate;
+
+        if let Some(old_key) = key.as_mut() {
+            if let Some(new_key) = ConfigKey::from_cli(cli_key) {
+                if !cli.yes
+                    && !Confirm::new("Are you sure you want to replace the key?")
+                        .prompt()
+                        .unwrap()
+                {
+                    return;
+                }
+
+                if generated {
+                    let ConfigKey::Mnemonic(mnemonic) = &new_key else {
+                        unreachable!();
+                    };
+
+                    let mnemonic = Mnemonic::from_str(mnemonic).unwrap();
+                    let secret_key = SecretKey::from_seed(&mnemonic.to_seed(""));
+                    let public_key = secret_key.public_key();
+
+                    println!(
+                        "{}",
+                        format!("Public key = {}", hex::encode(public_key.to_bytes()))
+                            .bright_yellow()
+                    );
+                    println!(
+                        "{}",
+                        format!("Fingerprint = {}", public_key.get_fingerprint()).bright_magenta()
+                    );
+                }
+
+                *old_key = new_key;
+            }
+        }
+
+        let agg_sig_data = agg_sig_data
+            .or_else(|| old_config.map(|config| config.agg_sig_data.clone()))
+            .unwrap_or_else(|| {
+                "ccd5bb71183532bff220ba46c268991a3ff07eb358e8255a65c30a2dce0e5fbb".to_string()
+            });
+
+        let bytes = hex::decode(strip_prefix(&agg_sig_data)).expect("invalid agg_sig_data");
+        let _: [u8; 32] = bytes.try_into().expect("invalid agg_sig_data");
+
         let config = Config {
-            key,
-            node_uri,
-            network_id: network_id.unwrap_or("mainnet".to_string()),
-            agg_sig_data: agg_sig_data.unwrap_or(
-                "ccd5bb71183532bff220ba46c268991a3ff07eb358e8255a65c30a2dce0e5fbb".to_string(),
-            ),
+            key: key.expect("missing key in config"),
+            node_uri: node_uri.or_else(|| old_config.and_then(|config| config.node_uri.clone())),
+            network_id: network_id
+                .or_else(|| old_config.map(|config| config.network_id.clone()))
+                .unwrap_or_else(|| "mainnet".to_string()),
+            agg_sig_data,
         };
+
         let config_str = serde_json::to_string_pretty(&config).expect("could not serialize config");
 
         fs::write(paths.config.as_path(), config_str).unwrap_or_else(|_| {
@@ -68,11 +129,11 @@ async fn main() {
         return println!("Config file initialized!");
     }
 
-    let config_str = fs::read_to_string(paths.config.as_path())
-        .unwrap_or_else(|_| panic!("no config file found, try running `{} init`", &program_name));
+    config_str
+        .unwrap_or_else(|| panic!("no config file found, try running `{} init`", &program_name));
+    let config = config.expect("invalid config file");
 
-    let config: Config = serde_json::from_str(&config_str).expect("invalid config file");
-    let key = WalletKey::from(config.key.clone());
+    let key = WalletKey::from_config(config.key.clone());
 
     let fingerprint = match &key {
         WalletKey::PublicKey(pk) => pk.get_fingerprint(),

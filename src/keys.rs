@@ -3,27 +3,18 @@ use std::str::FromStr;
 use bip39::Mnemonic;
 use chia_bls::{derive_keys::master_to_wallet_unhardened_intermediate, PublicKey, SecretKey};
 use clap::Args;
+use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 use crate::utils::strip_prefix;
 
-#[derive(Debug, Clone)]
-pub enum WalletKey {
-    SecretKey(SecretKey),
-    PublicKey(PublicKey),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ConfigKey {
-    Mnemonic(String),
-    SecretKey(String),
-    PublicKey(String),
-}
-
 #[derive(Args)]
-#[group(required = true, multiple = false)]
+#[group(multiple = false)]
 pub struct CliKey {
+    /// Generates a new mnemonic phrase.
+    #[arg(long)]
+    pub generate: bool,
+
     /// The mnemonic phrase used by your wallet.
     #[arg(long)]
     pub mnemonic: Option<String>,
@@ -37,31 +28,48 @@ pub struct CliKey {
     pub public_key: Option<String>,
 }
 
-// Maybe use `TryFrom`?
-impl From<CliKey> for ConfigKey {
-    fn from(value: CliKey) -> Self {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigKey {
+    Mnemonic(String),
+    SecretKey(String),
+    PublicKey(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum WalletKey {
+    SecretKey(SecretKey),
+    PublicKey(PublicKey),
+}
+
+impl ConfigKey {
+    pub fn from_cli(value: CliKey) -> Option<Self> {
         if let Some(sk) = value.secret_key {
             let sk = strip_prefix(&sk);
             let bytes = hex::decode(sk).expect("invalid secret key");
             assert_eq!(bytes.len(), 32, "invalid secret key");
-            ConfigKey::SecretKey(sk.to_string())
+            Some(ConfigKey::SecretKey(sk.to_string()))
         } else if let Some(pk) = value.public_key {
             let pk = strip_prefix(&pk);
             let bytes = hex::decode(pk).expect("invalid public key");
             assert_eq!(bytes.len(), 48, "invalid public key");
-            ConfigKey::PublicKey(pk.to_string())
+            Some(ConfigKey::PublicKey(pk.to_string()))
         } else if let Some(mnemonic) = value.mnemonic {
             let mnemonic = Mnemonic::from_str(&mnemonic).expect("invalid mnemonic");
-            ConfigKey::Mnemonic(mnemonic.to_string())
+            Some(ConfigKey::Mnemonic(mnemonic.to_string()))
+        } else if value.generate {
+            let mut entropy = [0u8; 32];
+            OsRng.fill_bytes(&mut entropy);
+            let mnemonic = Mnemonic::from_entropy(&entropy).expect("could not generate mnemonic");
+            Some(ConfigKey::Mnemonic(mnemonic.to_string()))
         } else {
-            unreachable!();
+            None
         }
     }
 }
 
-// Maybe use `TryFrom`?
-impl From<ConfigKey> for WalletKey {
-    fn from(value: ConfigKey) -> Self {
+impl WalletKey {
+    pub fn from_config(value: ConfigKey) -> Self {
         match value {
             ConfigKey::PublicKey(pk) => {
                 let pk = strip_prefix(&pk);

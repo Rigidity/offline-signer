@@ -60,13 +60,13 @@ The configuration is stored in `~/.offline-signer` by default.
 To set up the cold wallet, connected to your local mainnet full node:
 
 ```bash
-offline-signer init --public-key '<pk>' --node-uri localhost:8444
+offline-signer config --public-key '<pk>' --node-uri localhost:8444
 ```
 
 To set it up using the simulator (using your own port):
 
 ```bash
-offline-signer init --public-key '<pk>' --node-uri localhost:54939 --network-id simulator0
+offline-signer config --public-key '<pk>' --node-uri localhost:54939 --network-id simulator0
 ```
 
 Note that the `--agg-sig-data` is the same as the mainnet genesis challenge when using the simulator, and you will not need to override it. However on testnet, you will need to set it to the appropriate genesis challenge found with `chia show -s`.
@@ -82,16 +82,24 @@ chia keys show --show-mnemonic-seed
 To set up the signer, offline from the network:
 
 ```bash
-offline-signer init --mnemonic '<phrase>'
+offline-signer config --mnemonic '<phrase>'
 ```
 
 You can also use your root secret key instead of the mnemonic if you prefer:
 
 ```bash
-offline-signer init --secret-key '<sk>'
+offline-signer config --secret-key '<sk>'
 ```
 
 Note that you cannot create new transactions using this setup, since you have not connected a node.
+
+## Generate New Mnemonic
+
+You can generate a new mnemonic using this command:
+
+```bash
+offline-signer config --generate
+```
 
 ## Create Transaction
 

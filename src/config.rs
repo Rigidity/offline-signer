@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::keys::ConfigKey;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(flatten)]
     pub key: ConfigKey,
