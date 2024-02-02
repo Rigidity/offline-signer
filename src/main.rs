@@ -326,7 +326,7 @@ impl App {
             && !Confirm::new(&format!(
                 "Are you sure you want to send a transaction \
 with a fee of {} xch? That's unusually large.",
-                fee_amount as f64 * 1.0e12
+                fee_amount as f64 / 1.0e12
             ))
             .prompt()
             .unwrap()
