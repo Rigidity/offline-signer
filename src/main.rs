@@ -169,38 +169,39 @@ impl App {
         let mut key = old_config.map(|config| config.key.clone());
         let generated = cli_key.generate;
 
-        if let Some(old_key) = key.as_mut() {
-            if let Some(new_key) = ConfigKey::from_cli(cli_key) {
-                if !self.yes
-                    && !Confirm::new("Are you sure you want to replace the key?")
-                        .prompt()
-                        .unwrap()
-                {
-                    return;
-                }
+        let new_key = ConfigKey::from_cli(cli_key);
 
-                if generated {
-                    let ConfigKey::Mnemonic(mnemonic) = &new_key else {
-                        unreachable!();
-                    };
+        if key.is_some()
+            && new_key.is_some()
+            && !self.yes
+            && !Confirm::new("Are you sure you want to replace the key?")
+                .prompt()
+                .unwrap()
+        {
+            return;
+        }
 
-                    let mnemonic = Mnemonic::from_str(mnemonic).unwrap();
-                    let secret_key = SecretKey::from_seed(&mnemonic.to_seed(""));
-                    let public_key = secret_key.public_key();
+        if let Some(new_key) = new_key {
+            if generated {
+                let ConfigKey::Mnemonic(mnemonic) = &new_key else {
+                    unreachable!();
+                };
 
-                    println!(
-                        "{}",
-                        format!("Public key = {}", hex::encode(public_key.to_bytes()))
-                            .bright_yellow()
-                    );
-                    println!(
-                        "{}",
-                        format!("Fingerprint = {}", public_key.get_fingerprint()).bright_magenta()
-                    );
-                }
+                let mnemonic = Mnemonic::from_str(mnemonic).unwrap();
+                let secret_key = SecretKey::from_seed(&mnemonic.to_seed(""));
+                let public_key = secret_key.public_key();
 
-                *old_key = new_key;
+                println!(
+                    "{}",
+                    format!("Public key = {}", hex::encode(public_key.to_bytes())).bright_yellow()
+                );
+                println!(
+                    "{}",
+                    format!("Fingerprint = {}", public_key.get_fingerprint()).bright_magenta()
+                );
             }
+
+            key = Some(new_key);
         }
 
         let agg_sig_data = agg_sig_data
