@@ -160,8 +160,15 @@ impl App {
         network_id: Option<String>,
         agg_sig_data: Option<String>,
     ) {
-        if cli_key == CliKey::default() {
-            return println!("Config at path `{}`", &self.cli_name);
+        if cli_key == CliKey::default()
+            && node_uri.is_none()
+            && network_id.is_none()
+            && agg_sig_data.is_none()
+        {
+            return println!(
+                "Config at path `{}`",
+                &self.config_path.as_path().to_str().unwrap()
+            );
         }
 
         let old_config = self.config.as_ref();
@@ -231,7 +238,7 @@ impl App {
             )
         });
 
-        println!("Config file initialized!");
+        println!("Config file updated.");
     }
 
     async fn sign(self, file: String, derivation_index: u32) {
@@ -313,6 +320,19 @@ impl App {
         let puzzle_hash = parse_address(&address);
         let send_amount = amount_as_mojos(cli_amount, self.mojos);
         let fee_amount = amount_as_mojos(cli_fee, self.mojos);
+
+        if fee_amount > 1_000_000_000
+            && !self.yes
+            && !Confirm::new(&format!(
+                "Are you sure you want to send a transaction \
+with a fee of {} xch? That's unusually large.",
+                fee_amount as f64 * 1.0e12
+            ))
+            .prompt()
+            .unwrap()
+        {
+            return;
+        }
 
         let coin_store_sync = Arc::new(MemoryCoinStore::new());
 
